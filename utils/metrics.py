@@ -4,7 +4,7 @@ def hit_rate(recommended, ground_truth):
 def evaluate_model(model, test_data, all_items=None, k=10):
     hits = 0
     for user, true_item in test_data:
-        if hasattr(model, 'recommend') and all_items is not None:
+        if all_items is not None and 'all_items' in model.recommend.__code__.co_varnames:
             recs = model.recommend(user, all_items, k)
         else:
             recs = model.recommend(user, k)

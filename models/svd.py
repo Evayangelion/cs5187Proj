@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 from collections import defaultdict
@@ -18,7 +19,8 @@ class SVDEmbedding(nn.Module):
 
 class SVDRecommender:
     def __init__(self, num_users, num_items, emb_size=64, lr=0.01, epochs=10):
-        self.model = SVDEmbedding(num_users, num_items, emb_size)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = SVDEmbedding(num_users, num_items, emb_size).to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         self.epochs = epochs
         self.loss_fn = nn.MSELoss()
@@ -35,9 +37,9 @@ class SVDRecommender:
         interactions = [(user_map[u], item_map[i]) for u, i in train_data if u in user_map and i in item_map]
         for _ in range(self.epochs):
             for u, i in interactions:
-                user = torch.tensor([u])
-                item = torch.tensor([i])
-                rating = torch.tensor([[1.0]])
+                user = torch.tensor([u], device=self.device)
+                item = torch.tensor([i], device=self.device)
+                rating = torch.tensor([[1.0]], device=self.device)
                 pred = self.model(user, item)
                 loss = self.loss_fn(pred, rating)
                 self.optimizer.zero_grad()
@@ -48,10 +50,11 @@ class SVDRecommender:
         if user_id not in self.user_map:
             return []
         self.model.eval()
-        user_idx = torch.tensor([self.user_map[user_id]] * len(all_items))
-        item_indices = [self.item_map[i] for i in all_items if i in self.item_map]
-        items_tensor = torch.tensor(item_indices)
-        scores = self.model(user_idx, items_tensor).detach().squeeze().numpy()
-        scored_items = list(zip(item_indices, scores))
-        scored_items.sort(key=lambda x: x[1], reverse=True)
-        return [self.inv_item_map[i] for i, _ in scored_items[:k]]
+        with torch.no_grad():
+            item_indices = [self.item_map[i] for i in all_items if i in self.item_map]
+            user_idx = torch.tensor([self.user_map[user_id]] * len(item_indices), device=self.device)
+            items_tensor = torch.tensor(item_indices, device=self.device)
+            scores = self.model(user_idx, items_tensor).squeeze().cpu().numpy()
+            scored_items = list(zip(item_indices, scores))
+            scored_items.sort(key=lambda x: x[1], reverse=True)
+            return [self.inv_item_map[i] for i, _ in scored_items[:k]]
