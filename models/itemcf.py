@@ -9,10 +9,10 @@ class ItemCF:
 
     def fit(self, train_data):
         user_item = defaultdict(set)
-        for user, item in train_data:
+        for user, item, _ in train_data:
             user_item[user].add(item)
 
-        all_items = set(i for _, i in train_data)
+        all_items = set(i for _, i, _ in train_data)
         all_users = list(user_item.keys())
         item_index = {item: idx for idx, item in enumerate(all_items)}
         user_index = {user: idx for idx, user in enumerate(all_users)}

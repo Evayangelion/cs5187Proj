@@ -1,6 +1,8 @@
 from models.itemcf import ItemCF
 from models.svd import SVDRecommender
 from models.popularity import PopularityRecommender
+from models.lightGCN import LightGCNRecommender
+
 from utils.dataset import load_movielens
 from utils.metrics import evaluate_model
 import torch
@@ -21,22 +23,33 @@ if __name__ == '__main__':
     num_items = len(all_items)
 
     models = {
+        'LightGCN': LightGCNRecommender(num_users, num_items, epochs=200),
         'ItemCF': ItemCF(),
-        'SVD': SVDRecommender(num_users, num_items),
+        'SVD': SVDRecommender(num_users, num_items, epochs=200, batch_size=1024),
         'Popularity': PopularityRecommender()
     }
 
-for name, model in models.items():
-    logging.info(f"⏳ 开始训练模型: {name}")
-    start_time = time.time()
+    results = {}
+
+    for name, model in models.items():
+        logging.info(f"⏳ 开始训练模型: {name}")
+        start_time = time.time()
     
-    model.fit(train)
+        model.fit(train)
 
-    logging.info(f"✅ {name} 训练完成，开始评估")
-    if name == 'SVD':
-        hr = evaluate_model(model, test, all_items)
-    else:
-        hr = evaluate_model(model, test)
+        logging.info(f"✅ {name} 训练完成，开始评估")
+        if name in ['SVD', 'LightGCN']:
+            hr, ndcg, mrr = evaluate_model(model, test, all_items, k=10)
+        else:
+            hr, ndcg, mrr = evaluate_model(model, test, k=10)
 
-    end_time = time.time()
-    logging.info(f"📊 {name} HR@10 = {hr:.4f}，耗时 {(end_time - start_time):.2f} 秒")
+        end_time = time.time()
+        
+        logging.info(f"📊 {name} HR@10 = {hr:.4f}，耗时 {(end_time - start_time):.2f} 秒")
+
+        results[name] = {
+            'HR@10': hr,
+            'NDCG@10': ndcg,
+            'MRR@10': mrr,
+            'Time(s)': end_time - start_time
+        }
