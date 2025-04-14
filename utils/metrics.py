@@ -1,21 +1,25 @@
-# ==================== utils/metrics.py ====================
+# ==================== utils/metrics.py (patched for BERT4Rec) ====================
 import torch
 import logging
 import time
 
+
 def hit_rate(recommended, ground_truth):
     return int(ground_truth in recommended)
 
-def evaluate_model(model, test_data, all_items=None, k=10):
+
+def evaluate_model(model, test_data, all_items=None, k=10, max_users=None):
     hits, ndcgs, mrrs = [], [], []
     start_time = time.time()
 
-    item_idx_cache = []
-    if hasattr(model, 'item_map') and all_items is not None:
-        item_idx_cache = [model.item_map[i] for i in all_items if i in model.item_map]
-        item_tensor_cache = torch.tensor(item_idx_cache, device=model.device)
+    for idx, (user, true_item) in enumerate(test_data):
+        if max_users and idx >= max_users:
+            break
 
-    for user, true_item in test_data:
+        # logging progress every 100 users
+        if idx % 100000 == 0:
+            logging.info(f"🧪 已评估用户数: {idx}")
+
         if hasattr(model, 'recommend') and all_items is not None:
             try:
                 recs = model.recommend(user, all_items, k)
@@ -34,9 +38,9 @@ def evaluate_model(model, test_data, all_items=None, k=10):
             ndcgs.append(0.0)
             mrrs.append(0.0)
 
-    avg_hr = sum(hits) / len(hits)
-    avg_ndcg = sum(ndcgs) / len(ndcgs)
-    avg_mrr = sum(mrrs) / len(mrrs)
+    avg_hr = sum(hits) / len(hits) if hits else 0
+    avg_ndcg = sum(ndcgs) / len(ndcgs) if ndcgs else 0
+    avg_mrr = sum(mrrs) / len(mrrs) if mrrs else 0
 
     logging.info(f"📊 HR@{k} = {avg_hr:.4f}, NDCG@{k} = {avg_ndcg:.4f}, MRR@{k} = {avg_mrr:.4f}，耗时 {(time.time() - start_time):.2f} 秒")
     return avg_hr, avg_ndcg, avg_mrr
