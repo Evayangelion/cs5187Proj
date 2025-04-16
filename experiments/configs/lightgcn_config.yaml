@@ -1,0 +1,13 @@
+algorithm: lightgcn
+dataset_name: movielens
+params:
+  embedding_dim: 64
+  n_layers: 3
+  batch_size: 1024
+  lr: 0.001
+  epochs: 10
+  num_negatives: 4
+n_recommendations: 50
+k_values: [5, 10, 20, 50]
+methods: [standard]
+threshold: 4.0

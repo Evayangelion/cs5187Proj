@@ -1,12 +1,12 @@
-# ==================== models/bert4rec_optimized.py (加速版 with compile + AMP + 缓存) ====================
+# ==================== models/bert4rec_lightweight.py (CPU Friendly Optimized) ====================
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-import random
-import time
-import logging
 from collections import defaultdict
+import random
+import logging
+import time
 
 class SlidingWindowBertDataset(Dataset):
     def __init__(self, user_sequences, max_len, mask_prob=0.2, num_items=0):
@@ -32,7 +32,7 @@ class SlidingWindowBertDataset(Dataset):
         return torch.tensor(masked), torch.tensor(label)
 
 class BERT4Rec(nn.Module):
-    def __init__(self, num_items, hidden_dim=128, num_heads=2, num_layers=2, max_len=50):
+    def __init__(self, num_items, hidden_dim=64, num_heads=2, num_layers=1, max_len=50):
         super().__init__()
         self.item_emb = nn.Embedding(num_items + 2, hidden_dim, padding_idx=0)
         self.pos_emb = nn.Embedding(max_len, hidden_dim)
@@ -53,16 +53,10 @@ class BERT4Rec(nn.Module):
         return self.output(x)
 
 class BERT4RecRecommender:
-    def __init__(self, num_users, num_items, hidden_dim=256, max_len=100, lr=0.001, epochs=100, batch_size=256):
+    def __init__(self, num_users, num_items, hidden_dim=64, max_len=50, lr=0.001, epochs=20, batch_size=128):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = BERT4Rec(num_items, hidden_dim=hidden_dim, max_len=max_len).to(self.device)
-        try:
-            self.model = torch.compile(self.model)  # PyTorch 2.x only
-        except:
-            pass
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=epochs)
-        self.scaler = torch.cuda.amp.GradScaler()
         self.epochs = epochs
         self.batch_size = batch_size
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=0)
@@ -80,26 +74,23 @@ class BERT4RecRecommender:
 
         sequences = [[self.item_map[i] for i in items if i in self.item_map] for items in self.user_histories.values()]
         dataset = SlidingWindowBertDataset(sequences, max_len=self.max_len, num_items=len(self.item_map))
-        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, num_workers=0)
 
         for epoch in range(self.epochs):
             self.model.train()
             total_loss = 0
+            start = time.time()
             for tokens, labels in loader:
-                tokens = tokens.to(self.device, non_blocking=True)
-                labels = labels.to(self.device, non_blocking=True)
-                with torch.cuda.amp.autocast():
-                    logits = self.model(tokens)[:, -1, :]
-                    loss = self.loss_fn(logits, labels)
+                tokens = tokens.to(self.device)
+                labels = labels.to(self.device)
+                logits = self.model(tokens)[:, -1, :]
+                loss = self.loss_fn(logits, labels)
 
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
                 self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
                 total_loss += loss.item() * tokens.size(0)
-
-            self.scheduler.step()
-            logging.info(f"📘 BERT4Rec Epoch {epoch+1}/{self.epochs} Loss={total_loss/len(dataset):.4f}")
+            logging.info(f"📘 BERT4Rec Epoch {epoch+1}/{self.epochs} Loss={total_loss/len(dataset):.4f} ({time.time()-start:.2f}s)")
 
     def recommend(self, user_id, all_items, k=10):
         if user_id not in self.user_histories:

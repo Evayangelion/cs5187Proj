@@ -1,0 +1,8 @@
+algorithm: user_cf
+dataset_name: movielens
+params:
+  k: 30
+n_recommendations: 50
+k_values: [5, 10, 20, 50]
+methods: [standard]
+threshold: 4.0

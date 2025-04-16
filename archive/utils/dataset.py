@@ -54,4 +54,5 @@ def load_movielens(path='data/ml-1m/ratings.dat', split='temporal', seed=42):
     all_users = sorted(user_set)
     all_items = sorted(item_set)
 
+
     return train, test, all_items, all_users

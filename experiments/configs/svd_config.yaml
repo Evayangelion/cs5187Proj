@@ -1,0 +1,8 @@
+algorithm: svd
+dataset_name: movielens
+params:
+  n_factors_options: [10, 20, 50, 100]
+n_recommendations: 50
+k_values: [5, 10, 20, 50]
+methods: [standard]
+threshold: 4.0

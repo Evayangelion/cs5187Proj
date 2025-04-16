@@ -1,0 +1,8 @@
+algorithm: item_cf
+dataset_name: movielens
+params:
+  k: 50
+n_recommendations: 50
+k_values: [5, 10, 20, 50]
+methods: [standard, similarity]
+threshold: 4.0
